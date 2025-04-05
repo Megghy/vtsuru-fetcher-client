@@ -4,9 +4,7 @@
   "version": "0.1.0",
   "identifier": "live.vtsuru.fetcher.client",
   "build": {
-    "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:51000/client",
-    "beforeBuildCommand": "bun run build",
     "frontendDist": "https://vtsuru.suki.club/client"
   },
   "app": {
