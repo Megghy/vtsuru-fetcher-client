@@ -24,6 +24,7 @@
     "core:window:allow-hide",
     "core:window:allow-show",
     "store:default",
+    "process:allow-restart",
     "log:allow-log",
     {
       "identifier": "http:allow-fetch",
