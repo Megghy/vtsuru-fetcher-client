@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "vtsuru-fetcher-client",
+  "version": "0.1.0",
+  "identifier": "live.vtsuru.fetcher.client",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:51000/client",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "https://vtsuru.suki.club/client"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "vtsuru-fetcher-client",
+        "width": 800,
+        "height": 600,
+        "decorations": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFGN0E5ODU5MURGNEYxNjEKUldSaDhmUWRXWmg2cjhBU2hLcEhHdXRzeGFtM2JzOGFJcVh4d1B3blFyR2lENHBMRHFWUTErMEYK",
+      "endpoints": [
+        "https://releases.myapp.com/{{target}}/{{arch}}/{{current_version}}",
+        "https://github.com/Megghy/vtsuru.fetcher.client/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}
