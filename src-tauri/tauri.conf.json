@@ -11,7 +11,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "vtsuru-fetcher-client",
+        "title": "VTsuru Eventfetcher 客户端",
         "width": 800,
         "height": 600,
         "decorations": false,
@@ -35,8 +35,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFGN0E5ODU5MURGNEYxNjEKUldSaDhmUWRXWmg2cjhBU2hLcEhHdXRzeGFtM2JzOGFJcVh4d1B3blFyR2lENHBMRHFWUTErMEYK",
       "endpoints": [
-        "https://fetch.danmakus.com/https://github.com/Megghy/vtsuru.fetcher.client/releases/latest/download/latest.json",
-        "https://github.com/Megghy/vtsuru.fetcher.client/releases/latest/download/latest.json"
+        "https://vtsuru.suki.club/api/vtsuru/client/latest.json"
       ]
     }
   }
