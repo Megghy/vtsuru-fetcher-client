@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "core:window:allow-set-min-size",
     "notification:default",
     "notification:allow-notify",
     "notification:allow-register-listener",
