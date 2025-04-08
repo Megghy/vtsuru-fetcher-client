@@ -12,6 +12,7 @@
     "notification:default",
     "notification:allow-notify",
     "notification:allow-register-listener",
+    "notification:allow-register-action-types",
     "core:app:allow-default-window-icon",
     "core:window:default",
     "core:window:allow-start-dragging",

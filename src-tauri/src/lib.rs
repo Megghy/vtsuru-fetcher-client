@@ -46,6 +46,10 @@ fn get_memory_info() -> MemoryInfo {
 fn quit_app() {
     std::process::exit(0);
 }
+#[tauri::command]
+fn open_dev_tools(webview_window: tauri::WebviewWindow) {
+    webview_window.open_devtools();
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -81,7 +85,7 @@ pub fn run() {
             Some(vec!["--flag1", "--flag2"]),
         ))
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_memory_info, quit_app])
+        .invoke_handler(tauri::generate_handler![get_memory_info, quit_app, open_dev_tools])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
