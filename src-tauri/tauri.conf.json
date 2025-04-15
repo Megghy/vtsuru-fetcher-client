@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "vtsuru-fetcher-client",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "live.vtsuru.fetcher.client",
   "build": {
     "devUrl": "http://localhost:51000/client",
-    "frontendDist": "https://vtsuru.suki.club/client"
+    "frontendDist": "https://vtsuru.suki.club/client/"
   },
   "app": {
     "withGlobalTauri": true,
@@ -15,6 +15,21 @@
         "width": 800,
         "height": 600,
         "decorations": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
+      },
+      {
+        "title": "VTsuru 弹幕机",
+        "label": "danmaku-window",
+        "width": 300,
+        "height": 600,
+        "url": "danmaku-window",
+        "backgroundColor": "#00FFFFFF",
+        "decorations": false,
+        "visible": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "transparent": true,
+        "shadow": false,
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
       }
     ],

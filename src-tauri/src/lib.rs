@@ -10,6 +10,10 @@ use tauri::Manager;
 use serde::Serialize;
 use sysinfo::System;
 
+// 引入文件服务器模块
+mod file_server;
+use file_server::{FileServerConfig, FileServerStatus, FILE_SERVER};
+
 // Define a struct to represent the data we want to send to the frontend.
 // It needs `Serialize` to be convertible to JSON.
 #[derive(Serialize, Clone)] // Clone is useful if you might pass this around
@@ -42,13 +46,39 @@ fn get_memory_info() -> MemoryInfo {
         free: free_memory,
     }
 }
+
 #[tauri::command]
 fn quit_app() {
     std::process::exit(0);
 }
+
 #[tauri::command]
 fn open_dev_tools(webview_window: tauri::WebviewWindow) {
     webview_window.open_devtools();
+}
+
+// 文件服务器相关命令
+#[tauri::command]
+fn start_file_server() -> Result<FileServerStatus, String> {
+    FILE_SERVER.start_server()
+}
+
+#[tauri::command]
+fn stop_file_server() -> Result<FileServerStatus, String> {
+    FILE_SERVER.stop_server()
+}
+
+#[tauri::command]
+fn update_file_server_config(
+    folder_path: Option<String>,
+    port: Option<u16>,
+) -> Result<FileServerConfig, String> {
+    FILE_SERVER.update_config(folder_path, port)
+}
+
+#[tauri::command]
+fn get_file_server_status() -> FileServerStatus {
+    FILE_SERVER.get_status()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -85,7 +115,15 @@ pub fn run() {
             Some(vec!["--flag1", "--flag2"]),
         ))
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_memory_info, quit_app, open_dev_tools])
+        .invoke_handler(tauri::generate_handler![
+            get_memory_info,
+            quit_app,
+            open_dev_tools,
+            start_file_server,
+            stop_file_server,
+            update_file_server_config,
+            get_file_server_status
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

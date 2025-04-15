@@ -10,8 +10,6 @@
   ],
   "permissions": [
     "autostart:default",
-    "updater:default",
-    "updater:default",
     "updater:default"
   ]
 }

@@ -6,28 +6,33 @@
     "main"
   ],
   "permissions": [
-    "core:default",
-    "opener:default",
-    "core:window:allow-set-min-size",
-    "notification:default",
-    "notification:allow-notify",
-    "notification:allow-register-listener",
-    "notification:allow-register-action-types",
     "core:app:allow-default-window-icon",
-    "core:window:default",
-    "core:window:allow-start-dragging",
-    "http:default",
+    "core:default",
+    "core:webview:allow-create-webview",
+    "core:webview:allow-create-webview-window",
+    "core:webview:allow-internal-toggle-devtools",
+    "core:webview:allow-set-webview-background-color",
+    "core:webview:allow-webview-hide",
+    "core:webview:allow-webview-close",
+    "core:webview:default",
     "core:window:allow-center",
-    "core:window:allow-title",
-    "core:window:allow-maximize",
-    "core:window:allow-toggle-maximize",
-    "core:window:allow-minimize",
     "core:window:allow-close",
+    "core:window:allow-create",
     "core:window:allow-hide",
+    "core:window:allow-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-set-min-size",
+    "core:window:allow-set-resizable",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size",
     "core:window:allow-show",
-    "store:default",
-    "process:allow-restart",
-    "log:allow-log",
+    "core:window:allow-start-dragging",
+    "core:window:allow-title",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-set-always-on-top",
+    "core:window:default",
+    "http:default",
     {
       "identifier": "http:allow-fetch",
       "allow": [
@@ -38,6 +43,14 @@
           "url": "https://**"
         }
       ]
-    }
+    },
+    "log:allow-log",
+    "notification:allow-notify",
+    "notification:allow-register-action-types",
+    "notification:allow-register-listener",
+    "notification:default",
+    "opener:default",
+    "process:allow-restart",
+    "store:default"
   ]
 }
