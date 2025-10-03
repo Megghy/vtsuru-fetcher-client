@@ -15,7 +15,7 @@
         "width": 800,
         "height": 600,
         "decorations": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling"
       },
       {
         "title": "VTsuru 弹幕机",
@@ -30,7 +30,7 @@
         "alwaysOnTop": true,
         "transparent": true,
         "shadow": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling"
       }
     ],
     "security": {
@@ -41,17 +41,12 @@
     "createUpdaterArtifacts": true,
     "active": true,
     "targets": "all",
-    "icon": [
-      "icons/icon.png",
-      "icons/icon.ico"
-    ]
+    "icon": ["icons/icon.png", "icons/icon.ico"]
   },
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFGN0E5ODU5MURGNEYxNjEKUldSaDhmUWRXWmg2cjhBU2hLcEhHdXRzeGFtM2JzOGFJcVh4d1B3blFyR2lENHBMRHFWUTErMEYK",
-      "endpoints": [
-        "https://vtsuru.suki.club/api/vtsuru/client/latest.json"
-      ]
+      "endpoints": ["https://api.vtsuru.suki.club/api/vtsuru/client/latest.json"]
     }
   }
 }

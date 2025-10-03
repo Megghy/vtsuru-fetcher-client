@@ -14,6 +14,10 @@ use sysinfo::System;
 mod file_server;
 use file_server::{FileServerConfig, FileServerStatus, FILE_SERVER};
 
+// 引入心跳监控模块
+mod heartbeat;
+use heartbeat::{HeartbeatStatus, HEARTBEAT_MONITOR};
+
 // Define a struct to represent the data we want to send to the frontend.
 // It needs `Serialize` to be convertible to JSON.
 #[derive(Serialize, Clone)] // Clone is useful if you might pass this around
@@ -81,6 +85,17 @@ fn get_file_server_status() -> FileServerStatus {
     FILE_SERVER.get_status()
 }
 
+// 心跳相关命令
+#[tauri::command]
+fn heartbeat() {
+    HEARTBEAT_MONITOR.update_heartbeat();
+}
+
+#[tauri::command]
+fn get_heartbeat_status() -> HeartbeatStatus {
+    HEARTBEAT_MONITOR.get_status()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -122,8 +137,15 @@ pub fn run() {
             start_file_server,
             stop_file_server,
             update_file_server_config,
-            get_file_server_status
+            get_file_server_status,
+            heartbeat,
+            get_heartbeat_status
         ])
+        .setup(|app| {
+            // 启动心跳监控
+            HEARTBEAT_MONITOR.start_monitoring(app.handle().clone());
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
