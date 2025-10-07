@@ -2,8 +2,43 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager};
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::PathBuf;
+use tauri::AppHandle;
 use tauri_plugin_notification::NotificationExt;
+use chrono::Local;
+
+// 写入心跳日志
+fn write_heartbeat_log(message: &str) {
+    let log_dir = if cfg!(target_os = "windows") {
+        std::env::var("APPDATA")
+            .map(|appdata| PathBuf::from(appdata).join("live.vtsuru.fetcher.client").join("logs"))
+            .unwrap_or_else(|_| PathBuf::from("./logs"))
+    } else {
+        PathBuf::from("./logs")
+    };
+
+    // 确保日志目录存在
+    let _ = fs::create_dir_all(&log_dir);
+
+    let log_file = log_dir.join("heartbeat.log");
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
+    let log_message = format!("[{}] {}\n", timestamp, message);
+
+    // 写入日志文件
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file)
+    {
+        let _ = file.write_all(log_message.as_bytes());
+        let _ = file.flush();
+    }
+
+    // 同时输出到stderr
+    eprintln!("{}", log_message.trim());
+}
 
 // 心跳状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,14 +65,19 @@ impl HeartbeatMonitor {
     }
 
     fn notify_and_exit(app_handle: &AppHandle, timeout_duration: Duration) -> ! {
+        let error_msg = format!(
+            "前端加载失败，已超过 {} 秒未响应。应用即将退出。",
+            timeout_duration.as_secs()
+        );
+        
+        // 写入错误日志
+        write_heartbeat_log(&format!("致命错误: {}", error_msg));
+        
         let _ = app_handle
             .notification()
             .builder()
             .title("VTsuru 事件收集器")
-            .body(&format!(
-                "前端加载失败，已超过 {} 秒未响应。应用即将退出。",
-                timeout_duration.as_secs()
-            ))
+            .body(&error_msg)
             .show();
 
         thread::sleep(Duration::from_secs(3));
@@ -50,6 +90,7 @@ impl HeartbeatMonitor {
     pub fn update_heartbeat(&self) {
         let mut last = self.last_heartbeat.lock().unwrap();
         *last = Some(Instant::now());
+        // 正常心跳不记录日志
     }
 
     // 启动监控
@@ -68,8 +109,8 @@ impl HeartbeatMonitor {
 
         thread::spawn(move || {
             let start_time = Instant::now();
-            // 等待首次心跳，给前端足够的启动时间（稍短一些，因为总超时时间只有15秒）
-            let initial_wait = Duration::from_secs(5);
+            // 等待首次心跳，给前端足够的启动时间
+            let initial_wait = Duration::from_secs(10);
             thread::sleep(initial_wait);
 
             loop {
@@ -86,24 +127,26 @@ impl HeartbeatMonitor {
                     let elapsed = last_time.elapsed();
 
                     if elapsed > timeout_duration {
-                        eprintln!(
+                        let error_msg = format!(
                             "心跳超时: 已 {:?} 未收到前端心跳（阈值: {:?}）",
                             elapsed, timeout_duration
                         );
+                        write_heartbeat_log(&error_msg);
+                        eprintln!("{}", error_msg);
 
                         Self::notify_and_exit(&app_handle, timeout_duration);
                     }
                 } else {
                     // 还未收到首次心跳，检查是否超时
-                    // 这里我们使用一个更长的超时时间，因为前端可能需要时间加载
-                    eprintln!("警告: 尚未收到前端首次心跳");
+                    let elapsed = start_time.elapsed();
 
-                    if start_time.elapsed() > timeout_duration {
-                        eprintln!(
+                    if elapsed > timeout_duration {
+                        let error_msg = format!(
                             "前端启动超时: 已 {:?} 未收到首次心跳（阈值: {:?}）",
-                            start_time.elapsed(),
-                            timeout_duration
+                            elapsed, timeout_duration
                         );
+                        write_heartbeat_log(&error_msg);
+                        eprintln!("{}", error_msg);
 
                         Self::notify_and_exit(&app_handle, timeout_duration);
                     }
@@ -111,6 +154,7 @@ impl HeartbeatMonitor {
             }
         });
     }
+    #[allow(dead_code)]
     pub fn stop_monitoring(&self) {
         let mut is_monitoring = self.is_monitoring.lock().unwrap();
         *is_monitoring = false;
@@ -133,5 +177,5 @@ impl HeartbeatMonitor {
 
 // 创建心跳监控器的单例
 lazy_static::lazy_static! {
-    pub static ref HEARTBEAT_MONITOR: HeartbeatMonitor = HeartbeatMonitor::new(15); // 15秒超时
+    pub static ref HEARTBEAT_MONITOR: HeartbeatMonitor = HeartbeatMonitor::new(30); // 30秒超时，给前端更多时间初始化
 }

@@ -3,6 +3,10 @@
     windows_subsystem = "windows"
 )]
 use tauri::Manager;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::PathBuf;
+use chrono::Local;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
@@ -24,6 +28,64 @@ use heartbeat::{HeartbeatStatus, HEARTBEAT_MONITOR};
 struct MemoryInfo {
     total: u64, // Use u64 for byte counts, which can be large
     free: u64,
+}
+
+// 写入错误日志到文件
+fn write_error_log(message: &str) {
+    let log_dir = if cfg!(target_os = "windows") {
+        std::env::var("APPDATA")
+            .map(|appdata| PathBuf::from(appdata).join("live.vtsuru.fetcher.client").join("logs"))
+            .unwrap_or_else(|_| PathBuf::from("./logs"))
+    } else {
+        PathBuf::from("./logs")
+    };
+
+    // 确保日志目录存在
+    if let Err(e) = fs::create_dir_all(&log_dir) {
+        eprintln!("无法创建日志目录: {}", e);
+        return;
+    }
+
+    let log_file = log_dir.join("crash.log");
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
+    let log_message = format!("[{}] {}\n", timestamp, message);
+
+    // 写入日志文件
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file)
+    {
+        let _ = file.write_all(log_message.as_bytes());
+        let _ = file.flush();
+    }
+
+    // 同时输出到stderr
+    eprintln!("{}", log_message);
+}
+
+// 设置panic hook
+fn setup_panic_hook() {
+    std::panic::set_hook(Box::new(|panic_info| {
+        let location = panic_info.location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "未知位置".to_string());
+
+        let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "未知panic原因".to_string()
+        };
+
+        let error_msg = format!(
+            "应用程序发生严重错误 (panic):\n位置: {}\n错误: {}\n堆栈: {:?}",
+            location, message, std::backtrace::Backtrace::capture()
+        );
+
+        write_error_log(&error_msg);
+    }));
 }
 
 // Define the Tauri command function.
@@ -98,12 +160,38 @@ fn get_heartbeat_status() -> HeartbeatStatus {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 设置panic hook
+    setup_panic_hook();
+    
+    // 使用Result来捕获可能的错误
+    let result = std::panic::catch_unwind(|| {
+        run_app()
+    });
+    
+    match result {
+        Ok(_) => {
+            // 正常退出，不记录日志
+        }
+        Err(e) => {
+            let error_msg = if let Some(s) = e.downcast_ref::<&str>() {
+                format!("应用程序异常退出: {}", s)
+            } else if let Some(s) = e.downcast_ref::<String>() {
+                format!("应用程序异常退出: {}", s)
+            } else {
+                "应用程序异常退出: 未知错误".to_string()
+            };
+            write_error_log(&error_msg);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run_app() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -146,6 +234,25 @@ pub fn run() {
             HEARTBEAT_MONITOR.start_monitoring(app.handle().clone());
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .map_err(|e| {
+            let error_msg = format!("Tauri应用构建失败: {}", e);
+            write_error_log(&error_msg);
+            e
+        })
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            match event {
+                tauri::RunEvent::ExitRequested { api, code, .. } => {
+                    // 只在异常退出码时记录
+                    if let Some(code_val) = code {
+                        if code_val != 0 {
+                            write_error_log(&format!("应用异常退出请求: code={}", code_val));
+                        }
+                    }
+                    api.prevent_exit();
+                }
+                _ => {}
+            }
+        });
 }
