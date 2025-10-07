@@ -2,11 +2,11 @@
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
 )]
-use tauri::Manager;
+use chrono::Local;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use chrono::Local;
+use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
@@ -34,7 +34,11 @@ struct MemoryInfo {
 fn write_error_log(message: &str) {
     let log_dir = if cfg!(target_os = "windows") {
         std::env::var("APPDATA")
-            .map(|appdata| PathBuf::from(appdata).join("live.vtsuru.fetcher.client").join("logs"))
+            .map(|appdata| {
+                PathBuf::from(appdata)
+                    .join("live.vtsuru.fetcher.client")
+                    .join("logs")
+            })
             .unwrap_or_else(|_| PathBuf::from("./logs"))
     } else {
         PathBuf::from("./logs")
@@ -51,11 +55,7 @@ fn write_error_log(message: &str) {
     let log_message = format!("[{}] {}\n", timestamp, message);
 
     // 写入日志文件
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_file)
-    {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&log_file) {
         let _ = file.write_all(log_message.as_bytes());
         let _ = file.flush();
     }
@@ -67,7 +67,8 @@ fn write_error_log(message: &str) {
 // 设置panic hook
 fn setup_panic_hook() {
     std::panic::set_hook(Box::new(|panic_info| {
-        let location = panic_info.location()
+        let location = panic_info
+            .location()
             .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
             .unwrap_or_else(|| "未知位置".to_string());
 
@@ -81,7 +82,9 @@ fn setup_panic_hook() {
 
         let error_msg = format!(
             "应用程序发生严重错误 (panic):\n位置: {}\n错误: {}\n堆栈: {:?}",
-            location, message, std::backtrace::Backtrace::capture()
+            location,
+            message,
+            std::backtrace::Backtrace::capture()
         );
 
         write_error_log(&error_msg);
@@ -162,12 +165,10 @@ fn get_heartbeat_status() -> HeartbeatStatus {
 pub fn run() {
     // 设置panic hook
     setup_panic_hook();
-    
+
     // 使用Result来捕获可能的错误
-    let result = std::panic::catch_unwind(|| {
-        run_app()
-    });
-    
+    let result = std::panic::catch_unwind(|| run_app());
+
     match result {
         Ok(_) => {
             // 正常退出，不记录日志

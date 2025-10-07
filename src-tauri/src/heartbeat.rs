@@ -1,19 +1,23 @@
+use chrono::Local;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::{Duration, Instant};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use tauri_plugin_notification::NotificationExt;
-use chrono::Local;
 
 // 写入心跳日志
 fn write_heartbeat_log(message: &str) {
     let log_dir = if cfg!(target_os = "windows") {
         std::env::var("APPDATA")
-            .map(|appdata| PathBuf::from(appdata).join("live.vtsuru.fetcher.client").join("logs"))
+            .map(|appdata| {
+                PathBuf::from(appdata)
+                    .join("live.vtsuru.fetcher.client")
+                    .join("logs")
+            })
             .unwrap_or_else(|_| PathBuf::from("./logs"))
     } else {
         PathBuf::from("./logs")
@@ -27,11 +31,7 @@ fn write_heartbeat_log(message: &str) {
     let log_message = format!("[{}] {}\n", timestamp, message);
 
     // 写入日志文件
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_file)
-    {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&log_file) {
         let _ = file.write_all(log_message.as_bytes());
         let _ = file.flush();
     }
@@ -69,10 +69,10 @@ impl HeartbeatMonitor {
             "前端加载失败，已超过 {} 秒未响应。应用即将退出。",
             timeout_duration.as_secs()
         );
-        
+
         // 写入错误日志
         write_heartbeat_log(&format!("致命错误: {}", error_msg));
-        
+
         let _ = app_handle
             .notification()
             .builder()
@@ -166,9 +166,7 @@ impl HeartbeatMonitor {
         let is_monitoring = *self.is_monitoring.lock().unwrap();
 
         HeartbeatStatus {
-            last_heartbeat: last.map(|instant| {
-                format!("{:?} ago", instant.elapsed())
-            }),
+            last_heartbeat: last.map(|instant| format!("{:?} ago", instant.elapsed())),
             timeout_seconds: self.timeout_duration.as_secs(),
             is_monitoring,
         }

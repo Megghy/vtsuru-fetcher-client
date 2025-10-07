@@ -1,6 +1,6 @@
 [package]
 name = "vtsuru-fetcher-client"
-version = "0.1.0"
+version = "0.1.5"
 description = "VTsuru.live 事件收集器客户端"
 authors = ["Megghy"]
 edition = "2021"

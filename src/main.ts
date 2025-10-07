@@ -26,7 +26,7 @@ async function sendHeartbeat() {
 function startHeartbeat() {
   // 立即发送第一次心跳
   sendHeartbeat();
-  
+
   // 每5秒发送一次心跳（心跳超时时间是15秒）
   setInterval(sendHeartbeat, 5000);
 }
@@ -38,7 +38,7 @@ window.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     greet();
   });
-  
+
   // 启动心跳
   startHeartbeat();
 });
