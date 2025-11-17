@@ -22,6 +22,10 @@ use file_server::{FileServerConfig, FileServerStatus, FILE_SERVER};
 mod heartbeat;
 use heartbeat::{HeartbeatStatus, HEARTBEAT_MONITOR};
 
+// 引入RTMP转发模块
+mod rtmp_relay;
+use rtmp_relay::{FfmpegStatus, RtmpRelayConfig, RtmpRelayStatus, RTMP_RELAY};
+
 // Define a struct to represent the data we want to send to the frontend.
 // It needs `Serialize` to be convertible to JSON.
 #[derive(Serialize, Clone)] // Clone is useful if you might pass this around
@@ -118,7 +122,8 @@ fn get_memory_info() -> MemoryInfo {
 
 #[tauri::command]
 fn quit_app() {
-    std::process::exit(0);
+	let _ = RTMP_RELAY.stop_relay();
+	std::process::exit(0);
 }
 
 #[tauri::command]
@@ -159,6 +164,46 @@ fn heartbeat() {
 #[tauri::command]
 fn get_heartbeat_status() -> HeartbeatStatus {
     HEARTBEAT_MONITOR.get_status()
+}
+
+// RTMP转发相关命令
+#[tauri::command]
+fn start_rtmp_relay(target_url: String) -> Result<RtmpRelayStatus, String> {
+    RTMP_RELAY.start_relay(target_url)
+}
+
+#[tauri::command]
+fn stop_rtmp_relay() -> Result<RtmpRelayStatus, String> {
+    RTMP_RELAY.stop_relay()
+}
+
+#[tauri::command]
+fn get_rtmp_relay_status() -> RtmpRelayStatus {
+    RTMP_RELAY.get_status()
+}
+
+#[tauri::command]
+fn get_rtmp_local_url() -> String {
+    RTMP_RELAY.get_local_url()
+}
+
+#[tauri::command]
+fn update_rtmp_relay_config(
+    local_port: Option<u16>,
+    target_url: Option<String>,
+) -> Result<RtmpRelayConfig, String> {
+    RTMP_RELAY.update_config(local_port, target_url)
+}
+
+// FFmpeg 状态与下载
+#[tauri::command]
+fn get_ffmpeg_status() -> FfmpegStatus {
+    RTMP_RELAY.get_ffmpeg_status()
+}
+
+#[tauri::command]
+fn download_ffmpeg() -> Result<FfmpegStatus, String> {
+    RTMP_RELAY.download_ffmpeg()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -228,7 +273,14 @@ fn run_app() {
             update_file_server_config,
             get_file_server_status,
             heartbeat,
-            get_heartbeat_status
+            get_heartbeat_status,
+            start_rtmp_relay,
+            stop_rtmp_relay,
+            get_rtmp_relay_status,
+            get_rtmp_local_url,
+            update_rtmp_relay_config,
+            get_ffmpeg_status,
+            download_ffmpeg,
         ])
         .setup(|app| {
             // 启动心跳监控

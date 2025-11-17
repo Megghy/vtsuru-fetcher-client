@@ -64,7 +64,7 @@ impl FileServerManager {
         *self.shutdown_sender.lock().unwrap() = Some(tx);
 
         // 复制变量用于线程
-        let folder_path = config.folder_path.clone();
+        //let folder_path = config.folder_path.clone();
         let port = config.port;
         let running_arc = self.running.clone();
 
@@ -129,7 +129,7 @@ impl FileServerManager {
                     }
                 } else if file_path.is_dir() {
                     // 生成目录列表
-                    match generate_directory_listing(&file_path, &folder_path, url_path) {
+                    match generate_directory_listing(&file_path, url_path) {
                         Ok(listing) => {
                             Response::from_string(listing).with_header(tiny_http::Header {
                                 field: "Content-Type".parse().unwrap(),
@@ -199,7 +199,7 @@ impl FileServerManager {
         }
 
         if let Some(p) = port {
-            if p < 1024 || p > 65535 {
+            if !(1024..=65535).contains(&p) {
                 return Err("端口号必须在1024到65535之间".to_string());
             }
             config.port = p;
@@ -224,7 +224,6 @@ impl FileServerManager {
 // 生成目录列表HTML
 fn generate_directory_listing(
     dir_path: &PathBuf,
-    base_path: &str,
     url_path: &str,
 ) -> io::Result<String> {
     let mut html = String::from("<!DOCTYPE html>\n<html>\n<head>\n<title>目录列表</title>\n");
