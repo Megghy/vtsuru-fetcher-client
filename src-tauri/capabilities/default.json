@@ -52,6 +52,9 @@
     "notification:allow-register-action-types",
     "notification:allow-register-listener",
     "notification:default",
+    "dialog:default",
+    "fs:read-all",
+    "fs:write-all",
     "opener:default",
     "process:allow-restart",
     "store:default"

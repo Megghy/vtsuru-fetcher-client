@@ -27,6 +27,8 @@ tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
 tauri-plugin-log = "2"
 tauri-plugin-store = "2"
 tauri-plugin-os = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
 sysinfo = "0.34.2"
 tauri-plugin-process = "2"
 tokio = { version = "1", features = ["full"] }
@@ -43,4 +45,3 @@ reqwest = { version = "0.11", features = ["blocking"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
-

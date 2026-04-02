@@ -23,7 +23,6 @@
         "width": 300,
         "height": 600,
         "url": "danmaku-window",
-        "backgroundColor": "#FFFFFFFF",
         "decorations": false,
         "visible": false,
         "resizable": false,

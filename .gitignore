@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 # SpecStory explanation file
 .specstory/.what-is-this.md
+
+.*/
