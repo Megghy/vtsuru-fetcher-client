@@ -266,6 +266,7 @@ fn run_app() {
             Some(vec!["--flag1", "--flag2"]),
         ))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             get_memory_info,
             quit_app,

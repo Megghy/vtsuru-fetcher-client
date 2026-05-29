@@ -1,6 +1,6 @@
 [package]
 name = "vtsuru-fetcher-client"
-version = "0.1.7"
+version = "0.1.8"
 description = "VTsuru.live 事件收集器客户端"
 authors = ["Megghy"]
 edition = "2021"
@@ -45,3 +45,4 @@ reqwest = { version = "0.11", features = ["blocking"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
+tauri-plugin-global-shortcut = "2"
