@@ -26,6 +26,10 @@ use heartbeat::{HeartbeatStatus, HEARTBEAT_MONITOR};
 mod rtmp_relay;
 use rtmp_relay::{FfmpegStatus, RtmpRelayConfig, RtmpRelayStatus, RTMP_RELAY};
 
+// 引入开放 RPC 中继模块
+mod rpc_server;
+use rpc_server::{RpcServerStatus, RPC_SERVER};
+
 // Define a struct to represent the data we want to send to the frontend.
 // It needs `Serialize` to be convertible to JSON.
 #[derive(Serialize, Clone)] // Clone is useful if you might pass this around
@@ -206,6 +210,22 @@ fn download_ffmpeg() -> Result<FfmpegStatus, String> {
     RTMP_RELAY.download_ffmpeg()
 }
 
+// 开放 RPC 中继相关命令 (webview birpc 端调用)
+#[tauri::command]
+fn rpc_send(conn_id: String, data: String) -> Result<(), String> {
+    RPC_SERVER.send(&conn_id, data)
+}
+
+#[tauri::command]
+fn rpc_close(conn_id: String) -> Result<(), String> {
+    RPC_SERVER.close(&conn_id)
+}
+
+#[tauri::command]
+fn get_rpc_server_status() -> RpcServerStatus {
+    RPC_SERVER.get_status()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 设置panic hook
@@ -252,6 +272,14 @@ fn run_app() {
                     tauri_plugin_log::TargetKind::Webview,
                 ))
                 .max_file_size(50_000 /* bytes */)
+                // 默认 Info, 压掉 axum/hyper/tungstenite/tokio 等依赖的 trace/debug 刷屏
+                .level(log::LevelFilter::Info)
+                .level_for("hyper", log::LevelFilter::Warn)
+                .level_for("hyper_util", log::LevelFilter::Warn)
+                .level_for("tungstenite", log::LevelFilter::Warn)
+                .level_for("tokio_tungstenite", log::LevelFilter::Warn)
+                .level_for("tower_http", log::LevelFilter::Warn)
+                .level_for("reqwest", log::LevelFilter::Warn)
                 .build(),
         )
         .plugin(tauri_plugin_http::init())
@@ -284,10 +312,15 @@ fn run_app() {
             update_rtmp_relay_config,
             get_ffmpeg_status,
             download_ffmpeg,
+            rpc_send,
+            rpc_close,
+            get_rpc_server_status,
         ])
         .setup(|app| {
             // 启动心跳监控
             HEARTBEAT_MONITOR.start_monitoring(app.handle().clone());
+            // 启动开放 RPC 中继服务器
+            RPC_SERVER.start(app.handle().clone());
             Ok(())
         })
         .build(tauri::generate_context!())
