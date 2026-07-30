@@ -26,6 +26,12 @@ use heartbeat::{HeartbeatStatus, HEARTBEAT_MONITOR};
 mod rtmp_relay;
 use rtmp_relay::{FfmpegStatus, RtmpRelayConfig, RtmpRelayStatus, RTMP_RELAY};
 
+// 通用 FFmpeg 作业宿主。业务参数和协议由可信前端负责。
+mod ffmpeg_jobs;
+use ffmpeg_jobs::{
+    get_ffmpeg_job, list_ffmpeg_jobs, spawn_ffmpeg_job, stop_ffmpeg_job, FFMPEG_JOBS,
+};
+
 // 引入开放 RPC 中继模块
 mod rpc_server;
 use rpc_server::{RpcServerStatus, RPC_SERVER};
@@ -125,9 +131,10 @@ fn get_memory_info() -> MemoryInfo {
 }
 
 #[tauri::command]
-fn quit_app() {
-	let _ = RTMP_RELAY.stop_relay();
-	std::process::exit(0);
+async fn quit_app() {
+    let _ = RTMP_RELAY.stop_relay();
+    FFMPEG_JOBS.stop_all().await;
+    std::process::exit(0);
 }
 
 #[tauri::command]
@@ -277,7 +284,6 @@ fn run_app() {
                 .level_for("hyper", log::LevelFilter::Warn)
                 .level_for("hyper_util", log::LevelFilter::Warn)
                 .level_for("tungstenite", log::LevelFilter::Warn)
-                .level_for("tokio_tungstenite", log::LevelFilter::Warn)
                 .level_for("tower_http", log::LevelFilter::Warn)
                 .level_for("reqwest", log::LevelFilter::Warn)
                 .build(),
@@ -315,6 +321,10 @@ fn run_app() {
             rpc_send,
             rpc_close,
             get_rpc_server_status,
+            spawn_ffmpeg_job,
+            stop_ffmpeg_job,
+            get_ffmpeg_job,
+            list_ffmpeg_jobs,
         ])
         .setup(|app| {
             // 启动心跳监控

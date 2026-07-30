@@ -6,6 +6,7 @@
 // 数据流:
 //   外部网页 --WS--> [本模块] --emit rpc://message--> [webview birpc server]
 //   [webview] --invoke rpc_send--> [本模块] --WS--> 外部网页
+use crate::ffmpeg_jobs::FFMPEG_JOBS;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::State;
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::get;
@@ -115,6 +116,9 @@ impl RpcServerManager {
                 let app = Router::new()
                     .route("/health", get(health_handler).options(preflight_handler))
                     .route("/rpc", get(ws_handler))
+                    .route("/media/jobs/:job_id/stdin", get(ffmpeg_stdin_handler))
+                    .route("/media/jobs/:job_id/stdout", get(ffmpeg_stdout_handler))
+                    .route("/media/jobs/:job_id/stderr", get(ffmpeg_stderr_handler))
                     .with_state(state);
 
                 let addr = format!("127.0.0.1:{}", RPC_PORT);
@@ -186,14 +190,24 @@ impl AppState {
 // 浏览器要求 GET 回显 CORS 头, 且 OPTIONS 预检要带 Access-Control-Allow-Private-Network。
 fn cors_headers(origin: &str) -> [(&'static str, HeaderValue); 4] {
     // 仅回显白名单内的源, 否则不放行 (返回请求源无意义, 用空串让浏览器拦截)
-    let allow_origin = if is_origin_allowed(origin) { origin } else { "" };
+    let allow_origin = if is_origin_allowed(origin) {
+        origin
+    } else {
+        ""
+    };
     [
         (
             "access-control-allow-origin",
             HeaderValue::from_str(allow_origin).unwrap_or(HeaderValue::from_static("")),
         ),
-        ("access-control-allow-methods", HeaderValue::from_static("GET, OPTIONS")),
-        ("access-control-allow-private-network", HeaderValue::from_static("true")),
+        (
+            "access-control-allow-methods",
+            HeaderValue::from_static("GET, OPTIONS"),
+        ),
+        (
+            "access-control-allow-private-network",
+            HeaderValue::from_static("true"),
+        ),
         ("vary", HeaderValue::from_static("Origin")),
     ]
 }
@@ -237,6 +251,85 @@ async fn ws_handler(
         return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
     }
     ws.on_upgrade(move |socket| handle_socket(socket, state, origin))
+}
+
+#[derive(Deserialize)]
+struct FfmpegPipeQuery {
+    token: String,
+}
+
+async fn ffmpeg_stdin_handler(
+    ws: WebSocketUpgrade,
+    Path(job_id): Path<String>,
+    Query(query): Query<FfmpegPipeQuery>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !is_origin_allowed(&origin_of(&headers)) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Ok(stdin) = FFMPEG_JOBS.stdin(&job_id, &query.token) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    ws.on_upgrade(move |socket| async move {
+        let (_, mut receiver) = socket.split();
+        while let Some(Ok(message)) = receiver.next().await {
+            match message {
+                Message::Binary(chunk) => {
+                    if stdin.send(chunk).await.is_err() {
+                        return;
+                    }
+                }
+                Message::Close(_) => return,
+                _ => {}
+            }
+        }
+    })
+}
+
+async fn ffmpeg_stdout_handler(
+    ws: WebSocketUpgrade,
+    Path(job_id): Path<String>,
+    Query(query): Query<FfmpegPipeQuery>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !is_origin_allowed(&origin_of(&headers)) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Ok(mut stdout) = FFMPEG_JOBS.take_stdout(&job_id, &query.token) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    ws.on_upgrade(move |socket| async move {
+        let (mut sender, _) = socket.split();
+        while let Some(chunk) = stdout.recv().await {
+            if sender.send(Message::Binary(chunk)).await.is_err() {
+                return;
+            }
+        }
+        let _ = sender.send(Message::Close(None)).await;
+    })
+}
+
+async fn ffmpeg_stderr_handler(
+    ws: WebSocketUpgrade,
+    Path(job_id): Path<String>,
+    Query(query): Query<FfmpegPipeQuery>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !is_origin_allowed(&origin_of(&headers)) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Ok(mut stderr) = FFMPEG_JOBS.take_stderr(&job_id, &query.token) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    ws.on_upgrade(move |socket| async move {
+        let (mut sender, _) = socket.split();
+        while let Some(line) = stderr.recv().await {
+            if sender.send(Message::Text(line)).await.is_err() {
+                return;
+            }
+        }
+        let _ = sender.send(Message::Close(None)).await;
+    })
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState, origin: String) {

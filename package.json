@@ -1,7 +1,7 @@
 {
   "name": "vtsuru-fetcher-client",
   "private": true,
-  "version": "0.1.7",
+  "version": "0.1.11",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -5857,7 +5857,7 @@ dependencies = [
 
 [[package]]
 name = "vtsuru-fetcher-client"
-version = "0.1.9"
+version = "0.1.11"
 dependencies = [
  "axum",
  "bytes",
@@ -5887,6 +5887,8 @@ dependencies = [
  "tauri-plugin-updater",
  "tiny_http",
  "tokio",
+ "tokio-util",
+ "uuid",
 ]
 
 [[package]]
