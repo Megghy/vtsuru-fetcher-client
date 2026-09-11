@@ -32,6 +32,7 @@
     "core:window:allow-set-position",
     "core:window:allow-set-size",
     "core:window:allow-show",
+    "core:window:allow-set-focus",
     "core:window:allow-start-dragging",
     "core:window:allow-start-resize-dragging",
     "core:window:allow-title",
