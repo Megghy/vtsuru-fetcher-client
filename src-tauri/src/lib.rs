@@ -261,6 +261,16 @@ pub fn run() {
 
 fn run_app() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_denylist(&["danmaku-window", "gift-window", "vts-float-window"])
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())

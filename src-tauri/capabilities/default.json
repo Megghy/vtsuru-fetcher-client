@@ -62,6 +62,7 @@
     "opener:default",
     "process:allow-restart",
     "store:default",
+    "window-state:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
     "global-shortcut:allow-unregister-all",
