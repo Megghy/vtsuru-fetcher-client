@@ -9,7 +9,10 @@ use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use tauri_plugin_notification::NotificationExt;
 
-// 写入心跳日志
+#[path = "heartbeat_state.rs"]
+mod state;
+use state::{WatchdogEvent, WatchdogState, STARTUP_TIMEOUT};
+
 fn write_heartbeat_log(message: &str) {
     let log_dir = if cfg!(target_os = "windows") {
         std::env::var("APPDATA")
@@ -22,25 +25,22 @@ fn write_heartbeat_log(message: &str) {
     } else {
         PathBuf::from("./logs")
     };
-
-    // 确保日志目录存在
-    let _ = fs::create_dir_all(&log_dir);
-
-    let log_file = log_dir.join("heartbeat.log");
     let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
     let log_message = format!("[{}] {}\n", timestamp, message);
-
-    // 写入日志文件
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&log_file) {
-        let _ = file.write_all(log_message.as_bytes());
-        let _ = file.flush();
+    let result = (|| -> std::io::Result<()> {
+        fs::create_dir_all(&log_dir)?;
+        OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_dir.join("heartbeat.log"))?
+            .write_all(log_message.as_bytes())
+    })();
+    if let Err(error) = result {
+        eprintln!("写入心跳日志失败: {error}");
     }
-
-    // 同时输出到stderr
     eprintln!("{}", log_message.trim());
 }
 
-// 心跳状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeartbeatStatus {
     pub last_heartbeat: Option<String>,
@@ -48,132 +48,79 @@ pub struct HeartbeatStatus {
     pub is_monitoring: bool,
 }
 
-// 心跳监控器
 pub struct HeartbeatMonitor {
-    last_heartbeat: Arc<Mutex<Option<Instant>>>,
+    state: Arc<Mutex<WatchdogState>>,
     timeout_duration: Duration,
-    is_monitoring: Arc<Mutex<bool>>,
 }
 
 impl HeartbeatMonitor {
     pub fn new(timeout_seconds: u64) -> Self {
-        HeartbeatMonitor {
-            last_heartbeat: Arc::new(Mutex::new(None)),
+        Self {
+            state: Arc::new(Mutex::new(WatchdogState::new())),
             timeout_duration: Duration::from_secs(timeout_seconds),
-            is_monitoring: Arc::new(Mutex::new(false)),
         }
     }
 
-    fn notify_and_exit(app_handle: &AppHandle, timeout_duration: Duration) -> ! {
-        let error_msg = format!(
-            "前端加载失败，已超过 {} 秒未响应。应用即将退出。",
-            timeout_duration.as_secs()
-        );
-
-        // 写入错误日志
-        write_heartbeat_log(&format!("致命错误: {}", error_msg));
-
-        let _ = app_handle
-            .notification()
-            .builder()
-            .title("VTsuru 事件收集器")
-            .body(&error_msg)
-            .show();
-
-        thread::sleep(Duration::from_secs(3));
-
-        eprintln!("由于前端长时间未响应，应用退出");
-        std::process::exit(1);
-    }
-
-    // 更新心跳时间
     pub fn update_heartbeat(&self) {
-        let mut last = self.last_heartbeat.lock().unwrap();
-        *last = Some(Instant::now());
-        // 正常心跳不记录日志
+        if self.state.lock().unwrap().heartbeat(Instant::now()) {
+            write_heartbeat_log("前端心跳已恢复，继续监控");
+        }
     }
 
-    // 启动监控
     pub fn start_monitoring(&self, app_handle: AppHandle) {
-        let mut is_monitoring = self.is_monitoring.lock().unwrap();
-        if *is_monitoring {
+        if !self.state.lock().unwrap().start(Instant::now()) {
             return;
         }
-        *is_monitoring = true;
-        drop(is_monitoring);
-
-        let last_heartbeat = self.last_heartbeat.clone();
-        let timeout_duration = self.timeout_duration;
-        let is_monitoring_arc = self.is_monitoring.clone();
-        let app_handle = app_handle.clone();
-
-        thread::spawn(move || {
-            let start_time = Instant::now();
-            // 等待首次心跳，给前端足够的启动时间
-            let initial_wait = Duration::from_secs(10);
-            thread::sleep(initial_wait);
-
-            loop {
-                thread::sleep(Duration::from_secs(2)); // 每2秒检查一次
-
-                let monitoring = *is_monitoring_arc.lock().unwrap();
-                if !monitoring {
-                    break;
+        write_heartbeat_log(&format!(
+            "开始监控前端心跳：启动等待 {} 秒，运行失联阈值 {} 秒",
+            STARTUP_TIMEOUT.as_secs(),
+            self.timeout_duration.as_secs()
+        ));
+        let state = Arc::clone(&self.state);
+        let timeout = self.timeout_duration;
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_secs(2));
+            let event = state.lock().unwrap().check(Instant::now(), timeout);
+            let message = match event {
+                Some(WatchdogEvent::StartupTimeout) => format!(
+                    "前端启动超时：等待 {} 秒仍未收到首次心跳。请检查网络或重新打开窗口，客户端将继续等待恢复。",
+                    STARTUP_TIMEOUT.as_secs()
+                ),
+                Some(WatchdogEvent::HeartbeatTimeout) => format!(
+                    "前端心跳超时：已超过 {} 秒未响应，事件收集可能受到影响。请检查客户端窗口，客户端将继续等待恢复。",
+                    timeout.as_secs()
+                ),
+                Some(WatchdogEvent::Resumed) => {
+                    write_heartbeat_log("检测到监控线程长时间暂停，已重新给予心跳等待时间");
+                    continue;
                 }
-
-                let last = last_heartbeat.lock().unwrap().clone();
-
-                if let Some(last_time) = last {
-                    let elapsed = last_time.elapsed();
-
-                    if elapsed > timeout_duration {
-                        let error_msg = format!(
-                            "心跳超时: 已 {:?} 未收到前端心跳（阈值: {:?}）",
-                            elapsed, timeout_duration
-                        );
-                        write_heartbeat_log(&error_msg);
-                        eprintln!("{}", error_msg);
-
-                        Self::notify_and_exit(&app_handle, timeout_duration);
-                    }
-                } else {
-                    // 还未收到首次心跳，检查是否超时
-                    let elapsed = start_time.elapsed();
-
-                    if elapsed > timeout_duration {
-                        let error_msg = format!(
-                            "前端启动超时: 已 {:?} 未收到首次心跳（阈值: {:?}）",
-                            elapsed, timeout_duration
-                        );
-                        write_heartbeat_log(&error_msg);
-                        eprintln!("{}", error_msg);
-
-                        Self::notify_and_exit(&app_handle, timeout_duration);
-                    }
-                }
+                None => continue,
+            };
+            write_heartbeat_log(&message);
+            if let Err(error) = app_handle
+                .notification()
+                .builder()
+                .title("VTsuru 事件收集器")
+                .body(&message)
+                .show()
+            {
+                write_heartbeat_log(&format!("发送心跳异常通知失败: {error}"));
             }
         });
     }
-    #[allow(dead_code)]
-    pub fn stop_monitoring(&self) {
-        let mut is_monitoring = self.is_monitoring.lock().unwrap();
-        *is_monitoring = false;
-    }
 
-    // 获取状态
     pub fn get_status(&self) -> HeartbeatStatus {
-        let last = self.last_heartbeat.lock().unwrap();
-        let is_monitoring = *self.is_monitoring.lock().unwrap();
-
+        let state = self.state.lock().unwrap();
         HeartbeatStatus {
-            last_heartbeat: last.map(|instant| format!("{:?} ago", instant.elapsed())),
+            last_heartbeat: state
+                .last_heartbeat
+                .map(|instant| format!("{:?} ago", instant.elapsed())),
             timeout_seconds: self.timeout_duration.as_secs(),
-            is_monitoring,
+            is_monitoring: state.started_at.is_some(),
         }
     }
 }
 
-// 创建心跳监控器的单例
 lazy_static::lazy_static! {
-    pub static ref HEARTBEAT_MONITOR: HeartbeatMonitor = HeartbeatMonitor::new(30); // 30秒超时，给前端更多时间初始化
+    pub static ref HEARTBEAT_MONITOR: HeartbeatMonitor = HeartbeatMonitor::new(30);
 }
