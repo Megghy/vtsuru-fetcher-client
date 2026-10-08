@@ -17,6 +17,7 @@
         "minWidth": 860,
         "minHeight": 580,
         "decorations": false,
+        "dragDropEnabled": false,
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling "
       },
       {
