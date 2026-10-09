@@ -5872,7 +5872,7 @@ dependencies = [
 
 [[package]]
 name = "vtsuru-fetcher-client"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "axum",
  "bytes",
