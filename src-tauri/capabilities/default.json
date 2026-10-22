@@ -39,6 +39,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-content-protected",
+    "core:window:allow-set-background-color",
     "core:window:default",
     "http:default",
     {
