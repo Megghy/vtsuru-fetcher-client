@@ -28,9 +28,7 @@ use rtmp_relay::{FfmpegStatus, RtmpRelayConfig, RtmpRelayStatus, RTMP_RELAY};
 
 // 通用 FFmpeg 作业宿主。业务参数和协议由可信前端负责。
 mod ffmpeg_jobs;
-use ffmpeg_jobs::{
-    get_ffmpeg_job, list_ffmpeg_jobs, spawn_ffmpeg_job, stop_ffmpeg_job, FFMPEG_JOBS,
-};
+use ffmpeg_jobs::{get_ffmpeg_job, list_ffmpeg_jobs, spawn_ffmpeg_job, stop_ffmpeg_job};
 
 // 引入开放 RPC 中继模块
 mod rpc_server;
@@ -131,10 +129,9 @@ fn get_memory_info() -> MemoryInfo {
 }
 
 #[tauri::command]
-async fn quit_app() {
+fn quit_app(app: tauri::AppHandle) {
     let _ = RTMP_RELAY.stop_relay();
-    FFMPEG_JOBS.stop_all().await;
-    std::process::exit(0);
+    app.exit(0);
 }
 
 #[tauri::command]
@@ -353,11 +350,11 @@ fn run_app() {
         .run(|_app_handle, event| {
             match event {
                 tauri::RunEvent::ExitRequested { api, code, .. } => {
-                    // 只在异常退出码时记录
                     if let Some(code_val) = code {
                         if code_val != 0 {
                             write_error_log(&format!("应用异常退出请求: code={}", code_val));
                         }
+                        return;
                     }
                     api.prevent_exit();
                 }

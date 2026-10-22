@@ -1,6 +1,6 @@
 [package]
 name = "vtsuru-fetcher-client"
-version = "0.1.12"
+version = "0.1.13"
 description = "VTsuru.live 事件收集器客户端"
 authors = ["Megghy"]
 edition = "2021"
@@ -29,18 +29,18 @@ tauri-plugin-store = "2"
 tauri-plugin-os = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
-sysinfo = "0.34.2"
+sysinfo = "0.39"
 tauri-plugin-process = "2"
 tokio = { version = "1", features = ["full"] }
 tiny_http = "0.12"
-lazy_static = "1.4"
+lazy_static = "1"
 log = "0.4"
 chrono = "0.4"
-bytes = "1.5"
+bytes = "1"
 futures = "0.3"
 parking_lot = "0.12"
-reqwest = { version = "0.11", features = ["blocking"] }
-axum = { version = "0.7", features = ["ws"] }
+reqwest = { version = "0.13", features = ["blocking"] }
+axum = { version = "0.8", features = ["ws"] }
 tokio-util = "0.7"
 uuid = { version = "1", features = ["v4"] }
 

@@ -145,7 +145,7 @@ impl RpcServerManager {
             .get(conn_id)
             .ok_or_else(|| format!("连接不存在: {}", conn_id))?;
         sender
-            .send(Message::Text(data))
+            .send(Message::Text(data.into()))
             .map_err(|e| format!("发送失败: {}", e))
     }
 
@@ -275,7 +275,7 @@ async fn ffmpeg_stdin_handler(
         while let Some(Ok(message)) = receiver.next().await {
             match message {
                 Message::Binary(chunk) => {
-                    if stdin.send(chunk).await.is_err() {
+                    if stdin.send(chunk.to_vec()).await.is_err() {
                         return;
                     }
                 }
@@ -301,7 +301,7 @@ async fn ffmpeg_stdout_handler(
     ws.on_upgrade(move |socket| async move {
         let (mut sender, _) = socket.split();
         while let Some(chunk) = stdout.recv().await {
-            if sender.send(Message::Binary(chunk)).await.is_err() {
+            if sender.send(Message::Binary(chunk.into())).await.is_err() {
                 return;
             }
         }
@@ -324,7 +324,7 @@ async fn ffmpeg_stderr_handler(
     ws.on_upgrade(move |socket| async move {
         let (mut sender, _) = socket.split();
         while let Some(line) = stderr.recv().await {
-            if sender.send(Message::Text(line)).await.is_err() {
+            if sender.send(Message::Text(line.into())).await.is_err() {
                 return;
             }
         }
@@ -366,7 +366,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, origin: String) {
                 "rpc://message",
                 MessagePayload {
                     conn_id: conn_id.clone(),
-                    data: text,
+                    data: text.to_string(),
                 },
             ),
             Message::Close(_) => break,
