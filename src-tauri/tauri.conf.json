@@ -4,7 +4,7 @@
   "version": "0.1.13",
   "identifier": "live.vtsuru.fetcher.client",
   "build": {
-    "devUrl": "http://localhost:51000/client",
+    "devUrl": "http://localhost:5100/client",
     "frontendDist": "https://vtsuru.suki.club/client/"
   },
   "app": {
