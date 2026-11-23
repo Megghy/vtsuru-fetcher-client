@@ -1,4 +1,4 @@
-use crate::rtmp_relay::get_ffmpeg_local_path;
+use crate::ffmpeg_install::FFMPEG_INSTALL;
 use lazy_static::lazy_static;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
@@ -287,17 +287,15 @@ fn create_command(
     stdout: PipeMode,
     stderr: PipeMode,
 ) -> Result<Command, String> {
-    let local_ffmpeg = get_ffmpeg_local_path();
-    let executable = if command_exists("ffmpeg") {
-        "ffmpeg".to_string()
-    } else if local_ffmpeg.exists() {
-        local_ffmpeg.to_string_lossy().into_owned()
-    } else {
-        return Err("未找到 FFmpeg，请先通过客户端安装".to_string());
-    };
+    let (executable, _) = FFMPEG_INSTALL.resolve_executable()?;
 
     let mut command = Command::new(executable);
     command.args(args).kill_on_drop(true);
+    #[cfg(target_os = "windows")]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
     command.stdin(stdio(stdin));
     command.stdout(stdio(stdout));
     command.stderr(stdio(stderr));
@@ -309,16 +307,6 @@ fn stdio(mode: PipeMode) -> Stdio {
         PipeMode::Null => Stdio::null(),
         PipeMode::Pipe => Stdio::piped(),
     }
-}
-
-fn command_exists(executable: &str) -> bool {
-    std::process::Command::new(executable)
-        .arg("-version")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok()
 }
 
 async fn read_binary_stream(

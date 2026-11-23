@@ -2,81 +2,36 @@
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
 )]
-use chrono::Local;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-use std::path::PathBuf;
-use tauri::Manager;
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-
-// Import necessary items
 use serde::Serialize;
 use sysinfo::System;
 
-// 引入文件服务器模块
-mod file_server;
-use file_server::{FileServerConfig, FileServerStatus, FILE_SERVER};
-
-// 引入心跳监控模块
-mod heartbeat;
-use heartbeat::{HeartbeatStatus, HEARTBEAT_MONITOR};
-
-// 引入RTMP转发模块
-mod rtmp_relay;
-use rtmp_relay::{FfmpegStatus, RtmpRelayConfig, RtmpRelayStatus, RTMP_RELAY};
-
-// 通用 FFmpeg 作业宿主。业务参数和协议由可信前端负责。
+mod diagnostics;
+mod ffmpeg_install;
 mod ffmpeg_jobs;
-use ffmpeg_jobs::{get_ffmpeg_job, list_ffmpeg_jobs, spawn_ffmpeg_job, stop_ffmpeg_job};
-
-// 引入开放 RPC 中继模块
+mod heartbeat;
+mod paths;
 mod rpc_server;
-use rpc_server::{RpcServerStatus, RPC_SERVER};
+mod tray;
 
-// Define a struct to represent the data we want to send to the frontend.
-// It needs `Serialize` to be convertible to JSON.
-#[derive(Serialize, Clone)] // Clone is useful if you might pass this around
+use diagnostics::{
+    get_diagnostics_info, is_autostart_arg_present, open_log_dir, read_diagnostic_logs,
+};
+use ffmpeg_install::{download_ffmpeg, get_ffmpeg_status, set_custom_ffmpeg_path};
+use ffmpeg_jobs::{
+    get_ffmpeg_job, list_ffmpeg_jobs, spawn_ffmpeg_job, stop_ffmpeg_job, FFMPEG_JOBS,
+};
+use heartbeat::{HeartbeatStatus, HEARTBEAT_MONITOR};
+use paths::append_log_file;
+use rpc_server::{RpcServerStatus, RPC_SERVER};
+use tray::{reload_main_window_internal, setup_native_tray, show_main_window};
+
+#[derive(Serialize, Clone)]
 struct MemoryInfo {
-    total: u64, // Use u64 for byte counts, which can be large
+    total: u64,
     free: u64,
 }
 
-// 写入错误日志到文件
-fn write_error_log(message: &str) {
-    let log_dir = if cfg!(target_os = "windows") {
-        std::env::var("APPDATA")
-            .map(|appdata| {
-                PathBuf::from(appdata)
-                    .join("live.vtsuru.fetcher.client")
-                    .join("logs")
-            })
-            .unwrap_or_else(|_| PathBuf::from("./logs"))
-    } else {
-        PathBuf::from("./logs")
-    };
-
-    // 确保日志目录存在
-    if let Err(e) = fs::create_dir_all(&log_dir) {
-        eprintln!("无法创建日志目录: {}", e);
-        return;
-    }
-
-    let log_file = log_dir.join("crash.log");
-    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
-    let log_message = format!("[{}] {}\n", timestamp, message);
-
-    // 写入日志文件
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&log_file) {
-        let _ = file.write_all(log_message.as_bytes());
-        let _ = file.flush();
-    }
-
-    // 同时输出到stderr
-    eprintln!("{}", log_message);
-}
-
-// 设置panic hook
 fn setup_panic_hook() {
     std::panic::set_hook(Box::new(|panic_info| {
         let location = panic_info
@@ -99,38 +54,23 @@ fn setup_panic_hook() {
             std::backtrace::Backtrace::capture()
         );
 
-        write_error_log(&error_msg);
+        append_log_file(None, "crash.log", &error_msg);
     }));
 }
 
-// Define the Tauri command function.
-#[tauri::command] // This macro exposes the function to the frontend
+#[tauri::command]
 fn get_memory_info() -> MemoryInfo {
-    // Create a new System instance.
-    // `new_all` initializes everything, including CPU list, network list, etc.
-    // Use `System::new()` if you only need memory/process/disk info initially.
-    let mut sys = System::new_all();
-
-    // Refresh the memory information. It's important to refresh before reading!
+    let mut sys = System::new();
     sys.refresh_memory();
-
-    // Get the total and free memory (in bytes).
-    // Note: `free_memory` might not include reclaimable memory like caches/buffers on some OSes (like Linux).
-    // `available_memory()` often gives a more practical "how much can be used" value on those systems.
-    // Stick with `free_memory` to exactly match the frontend example's `free` field.
-    let total_memory = sys.total_memory();
-    let free_memory = sys.free_memory();
-
-    // Create and return the MemoryInfo struct.
     MemoryInfo {
-        total: total_memory,
-        free: free_memory,
+        total: sys.total_memory(),
+        free: sys.free_memory(),
     }
 }
 
 #[tauri::command]
-fn quit_app(app: tauri::AppHandle) {
-    let _ = RTMP_RELAY.stop_relay();
+async fn quit_app(app: tauri::AppHandle) {
+    FFMPEG_JOBS.stop_all().await;
     app.exit(0);
 }
 
@@ -139,31 +79,16 @@ fn open_dev_tools(webview_window: tauri::WebviewWindow) {
     webview_window.open_devtools();
 }
 
-// 文件服务器相关命令
 #[tauri::command]
-fn start_file_server() -> Result<FileServerStatus, String> {
-    FILE_SERVER.start_server()
+fn reload_main_window(app: tauri::AppHandle) {
+    reload_main_window_internal(&app);
 }
 
 #[tauri::command]
-fn stop_file_server() -> Result<FileServerStatus, String> {
-    FILE_SERVER.stop_server()
+fn is_autostart_launch() -> bool {
+    is_autostart_arg_present()
 }
 
-#[tauri::command]
-fn update_file_server_config(
-    folder_path: Option<String>,
-    port: Option<u16>,
-) -> Result<FileServerConfig, String> {
-    FILE_SERVER.update_config(folder_path, port)
-}
-
-#[tauri::command]
-fn get_file_server_status() -> FileServerStatus {
-    FILE_SERVER.get_status()
-}
-
-// 心跳相关命令
 #[tauri::command]
 fn heartbeat() {
     HEARTBEAT_MONITOR.update_heartbeat();
@@ -174,47 +99,11 @@ fn get_heartbeat_status() -> HeartbeatStatus {
     HEARTBEAT_MONITOR.get_status()
 }
 
-// RTMP转发相关命令
 #[tauri::command]
-fn start_rtmp_relay(target_url: String) -> Result<RtmpRelayStatus, String> {
-    RTMP_RELAY.start_relay(target_url)
+fn set_heartbeat_auto_reload(enabled: bool) {
+    HEARTBEAT_MONITOR.set_auto_reload(enabled);
 }
 
-#[tauri::command]
-fn stop_rtmp_relay() -> Result<RtmpRelayStatus, String> {
-    RTMP_RELAY.stop_relay()
-}
-
-#[tauri::command]
-fn get_rtmp_relay_status() -> RtmpRelayStatus {
-    RTMP_RELAY.get_status()
-}
-
-#[tauri::command]
-fn get_rtmp_local_url() -> String {
-    RTMP_RELAY.get_local_url()
-}
-
-#[tauri::command]
-fn update_rtmp_relay_config(
-    local_port: Option<u16>,
-    target_url: Option<String>,
-) -> Result<RtmpRelayConfig, String> {
-    RTMP_RELAY.update_config(local_port, target_url)
-}
-
-// FFmpeg 状态与下载
-#[tauri::command]
-fn get_ffmpeg_status() -> FfmpegStatus {
-    RTMP_RELAY.get_ffmpeg_status()
-}
-
-#[tauri::command]
-fn download_ffmpeg() -> Result<FfmpegStatus, String> {
-    RTMP_RELAY.download_ffmpeg()
-}
-
-// 开放 RPC 中继相关命令 (webview birpc 端调用)
 #[tauri::command]
 fn rpc_send(conn_id: String, data: String) -> Result<(), String> {
     RPC_SERVER.send(&conn_id, data)
@@ -232,27 +121,19 @@ fn get_rpc_server_status() -> RpcServerStatus {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // 设置panic hook
     setup_panic_hook();
 
-    // 使用Result来捕获可能的错误
-    let result = std::panic::catch_unwind(|| run_app());
-
-    match result {
-        Ok(_) => {
-            // 正常退出，不记录日志
-        }
-        Err(e) => {
-            let error_msg = if let Some(s) = e.downcast_ref::<&str>() {
-                format!("应用程序异常退出: {}", s)
-            } else if let Some(s) = e.downcast_ref::<String>() {
-                format!("应用程序异常退出: {}", s)
-            } else {
-                "应用程序异常退出: 未知错误".to_string()
-            };
-            write_error_log(&error_msg);
-            std::process::exit(1);
-        }
+    let result = std::panic::catch_unwind(run_app);
+    if let Err(e) = result {
+        let error_msg = if let Some(s) = e.downcast_ref::<&str>() {
+            format!("应用程序异常退出: {}", s)
+        } else if let Some(s) = e.downcast_ref::<String>() {
+            format!("应用程序异常退出: {}", s)
+        } else {
+            "应用程序异常退出: 未知错误".to_string()
+        };
+        append_log_file(None, "crash.log", &error_msg);
+        std::process::exit(1);
     }
 }
 
@@ -260,7 +141,7 @@ fn run_app() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_window_state::Builder::default()
-                .with_denylist(&["danmaku-window", "gift-window", "vts-float-window"])
+                .with_denylist(&["danmaku-window", "gift-window"])
                 .with_state_flags(
                     tauri_plugin_window_state::StateFlags::SIZE
                         | tauri_plugin_window_state::StateFlags::POSITION
@@ -285,8 +166,7 @@ fn run_app() {
                 .target(tauri_plugin_log::Target::new(
                     tauri_plugin_log::TargetKind::Webview,
                 ))
-                .max_file_size(50_000 /* bytes */)
-                // 默认 Info, 压掉 axum/hyper/tungstenite/tokio 等依赖的 trace/debug 刷屏
+                .max_file_size(5 * 1024 * 1024)
                 .level(log::LevelFilter::Info)
                 .level_for("hyper", log::LevelFilter::Warn)
                 .level_for("hyper_util", log::LevelFilter::Warn)
@@ -297,14 +177,11 @@ fn run_app() {
         )
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            let _ = app
-                .get_webview_window("main")
-                .expect("no main window")
-                .set_focus();
+            show_main_window(app);
         }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--flag1", "--flag2"]),
+            Some(vec!["--autostart"]),
         ))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -312,18 +189,13 @@ fn run_app() {
             get_memory_info,
             quit_app,
             open_dev_tools,
-            start_file_server,
-            stop_file_server,
-            update_file_server_config,
-            get_file_server_status,
+            reload_main_window,
+            is_autostart_launch,
             heartbeat,
             get_heartbeat_status,
-            start_rtmp_relay,
-            stop_rtmp_relay,
-            get_rtmp_relay_status,
-            get_rtmp_local_url,
-            update_rtmp_relay_config,
+            set_heartbeat_auto_reload,
             get_ffmpeg_status,
+            set_custom_ffmpeg_path,
             download_ffmpeg,
             rpc_send,
             rpc_close,
@@ -332,33 +204,38 @@ fn run_app() {
             stop_ffmpeg_job,
             get_ffmpeg_job,
             list_ffmpeg_jobs,
+            get_diagnostics_info,
+            open_log_dir,
+            read_diagnostic_logs,
         ])
         .setup(|app| {
-            // 启动心跳监控
+            if let Err(err) = setup_native_tray(app.handle()) {
+                log::error!("[Tray] 创建系统托盘失败: {err}");
+            }
             HEARTBEAT_MONITOR.start_monitoring(app.handle().clone());
-            // 启动开放 RPC 中继服务器
             RPC_SERVER.start(app.handle().clone());
             Ok(())
         })
         .build(tauri::generate_context!())
         .map_err(|e| {
             let error_msg = format!("Tauri应用构建失败: {}", e);
-            write_error_log(&error_msg);
+            append_log_file(None, "crash.log", &error_msg);
             e
         })
         .expect("error while building tauri application")
         .run(|_app_handle, event| {
-            match event {
-                tauri::RunEvent::ExitRequested { api, code, .. } => {
-                    if let Some(code_val) = code {
-                        if code_val != 0 {
-                            write_error_log(&format!("应用异常退出请求: code={}", code_val));
-                        }
-                        return;
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
+                if let Some(code_val) = code {
+                    if code_val != 0 {
+                        append_log_file(
+                            None,
+                            "crash.log",
+                            &format!("应用异常退出请求: code={}", code_val),
+                        );
                     }
-                    api.prevent_exit();
+                    return;
                 }
-                _ => {}
+                api.prevent_exit();
             }
         });
 }

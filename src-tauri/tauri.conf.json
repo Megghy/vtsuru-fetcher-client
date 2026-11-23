@@ -19,34 +19,6 @@
         "decorations": false,
         "dragDropEnabled": false,
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling "
-      },
-      {
-        "title": "VTsuru 弹幕机",
-        "label": "danmaku-window",
-        "width": 300,
-        "height": 600,
-        "url": "danmaku-window",
-        "decorations": false,
-        "visible": false,
-        "resizable": false,
-        "alwaysOnTop": true,
-        "transparent": true,
-        "shadow": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling"
-      },
-      {
-        "title": "VTsuru 礼物窗口",
-        "label": "gift-window",
-        "width": 320,
-        "height": 520,
-        "url": "gift-window",
-        "decorations": false,
-        "visible": false,
-        "resizable": true,
-        "alwaysOnTop": true,
-        "transparent": true,
-        "shadow": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling"
       }
     ],
     "security": {
