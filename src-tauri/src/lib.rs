@@ -89,6 +89,16 @@ fn is_autostart_launch() -> bool {
     is_autostart_arg_present()
 }
 
+/// 返回主窗口配置的 additionalBrowserArgs，确保动态创建子 WebView2 时与主窗口环境参数完全一致（避免 Windows 0x8007139F）
+#[tauri::command]
+fn get_webview_browser_args(app: tauri::AppHandle) -> Option<String> {
+    app.config()
+        .app
+        .windows
+        .first()
+        .and_then(|w| w.additional_browser_args.clone())
+}
+
 #[tauri::command]
 fn heartbeat() {
     HEARTBEAT_MONITOR.update_heartbeat();
@@ -191,6 +201,7 @@ fn run_app() {
             open_dev_tools,
             reload_main_window,
             is_autostart_launch,
+            get_webview_browser_args,
             heartbeat,
             get_heartbeat_status,
             set_heartbeat_auto_reload,
