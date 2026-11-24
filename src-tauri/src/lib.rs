@@ -12,6 +12,7 @@ mod ffmpeg_jobs;
 mod heartbeat;
 mod paths;
 mod rpc_server;
+mod tool_manager;
 mod tray;
 
 use diagnostics::{
@@ -24,6 +25,10 @@ use ffmpeg_jobs::{
 use heartbeat::{HeartbeatStatus, HEARTBEAT_MONITOR};
 use paths::append_log_file;
 use rpc_server::{RpcServerStatus, RPC_SERVER};
+use tool_manager::{
+    configure_obs_websocket, get_client_capabilities, get_managed_tools_status,
+    launch_managed_tool, open_managed_tool_dir, probe_local_port, stop_managed_tool,
+};
 use tray::{reload_main_window_internal, setup_native_tray, show_main_window};
 
 #[derive(Serialize, Clone)]
@@ -218,6 +223,13 @@ fn run_app() {
             get_diagnostics_info,
             open_log_dir,
             read_diagnostic_logs,
+            get_client_capabilities,
+            probe_local_port,
+            get_managed_tools_status,
+            configure_obs_websocket,
+            launch_managed_tool,
+            stop_managed_tool,
+            open_managed_tool_dir,
         ])
         .setup(|app| {
             if let Err(err) = setup_native_tray(app.handle()) {
