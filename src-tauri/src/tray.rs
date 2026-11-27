@@ -1,5 +1,5 @@
 use crate::diagnostics::open_log_dir;
-use crate::ffmpeg_jobs::FFMPEG_JOBS;
+use crate::quit_app_internal;
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
@@ -64,8 +64,7 @@ pub fn setup_native_tray(app: &AppHandle) -> tauri::Result<()> {
             "quit" => {
                 let handle = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    FFMPEG_JOBS.stop_all().await;
-                    handle.exit(0);
+                    quit_app_internal(handle).await;
                 });
             }
             _ => {}

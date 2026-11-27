@@ -4,7 +4,9 @@
 )]
 
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use sysinfo::System;
+use tauri::{Emitter, Manager};
 
 mod diagnostics;
 mod ffmpeg_install;
@@ -73,10 +75,25 @@ fn get_memory_info() -> MemoryInfo {
     }
 }
 
-#[tauri::command]
-async fn quit_app(app: tauri::AppHandle) {
+static CLOSE_MAIN_WINDOW_TO_EXIT: AtomicBool = AtomicBool::new(false);
+static IS_EXITING: AtomicBool = AtomicBool::new(false);
+
+pub(crate) async fn quit_app_internal(app: tauri::AppHandle) {
+    if IS_EXITING.swap(true, Ordering::SeqCst) {
+        return;
+    }
     FFMPEG_JOBS.stop_all().await;
     app.exit(0);
+}
+
+#[tauri::command]
+async fn quit_app(app: tauri::AppHandle) {
+    quit_app_internal(app).await;
+}
+
+#[tauri::command]
+fn set_close_window_action(action: String) {
+    CLOSE_MAIN_WINDOW_TO_EXIT.store(action == "exit", Ordering::SeqCst);
 }
 
 #[tauri::command]
@@ -203,6 +220,7 @@ fn run_app() {
         .invoke_handler(tauri::generate_handler![
             get_memory_info,
             quit_app,
+            set_close_window_action,
             open_dev_tools,
             reload_main_window,
             is_autostart_launch,
@@ -231,6 +249,24 @@ fn run_app() {
             stop_managed_tool,
             open_managed_tool_dir,
         ])
+        .on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                if CLOSE_MAIN_WINDOW_TO_EXIT.load(Ordering::SeqCst) {
+                    let app = window.app_handle().clone();
+                    let _ = app.emit("window://close-exit-requested", ());
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        quit_app_internal(app).await;
+                    });
+                } else {
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
             if let Err(err) = setup_native_tray(app.handle()) {
                 log::error!("[Tray] 创建系统托盘失败: {err}");
